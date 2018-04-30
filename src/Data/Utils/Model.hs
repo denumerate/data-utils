@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies, MultiParamTypeClasses #-}
+{-# LANGUAGE TypeFamilies, MultiParamTypeClasses, ScopedTypeVariables #-}
 module Data.Utils.Model
   () where
 
@@ -10,7 +10,7 @@ import Control.Monad.Except(MonadError)
 
 -- |Describes a model class that describes a function, built from a data set,
 -- that can then be used to predict new values on new data sets.
-class Model m where
+class Model m d where
   -- |Trains a model using a provided data set.
   trainModel :: d a -- ^ The data set used to train the model.
     -> m -- ^ The produced model.
@@ -40,9 +40,10 @@ class DataSet d where
 -- |A function that takes two data sets and produces a collection of error scores.
 type ErrorFunction d t a b = d a -> d b -> t Double
 
-kfoldCV :: (DataSet d,Model m,MonadRandom mr,MonadError e me) =>
-  ErrorFunction d t a b -> m -> d a -> Int -> mr (me [t Double])
-kfoldCV ef model dset n = partition n dset >>=
-  \ds -> return $ map (\i -> concatSet (V.ifilter (\i' _ -> i'/=i)) ds >>=
-                        \ds' -> testModel ef ds' (trainModel (ds V.! i)))
+kfoldCV :: (Model m d,DataSet d,MonadRandom mr,MonadError e me) =>
+  ErrorFunction d t a b -> d a -> Int -> mr (me [t Double])
+kfoldCV ef dset n = partition n dset >>=
+  \ds -> return $ mapM (\i -> concatSet (V.ifilter (\i' _ -> i'/=i) ds) >>=
+                         \ds' -> return (testModel ef ds'
+                                         (trainModel (ds V.! i) :: m)))
          [0..n]
