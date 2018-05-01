@@ -1,7 +1,11 @@
 {-# LANGUAGE TypeFamilies, MultiParamTypeClasses, ScopedTypeVariables #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
-module Data.Utils.Model
-  () where
+module Data.Model
+  ( Model(..)
+  , ErrorFunction
+  , DataSet(..)
+  , kfoldCV
+  ) where
 
 import Data.Foldable(foldlM)
 import Data.Vector(Vector)
