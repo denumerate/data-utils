@@ -37,8 +37,8 @@ class DataSet d where
   -- Allows for error throwing if the records do not match.
   append :: MonadError e m => d a -> d a -> m (d a)
   -- |Appends multiple data sets.
-  concatSet :: MonadError e m => Foldable t => t (d a) -> m (d a)
-  concatSet = foldlM append undefined
+  concatSet :: MonadError e m => [d a] -> m (d a)
+  concatSet vs = foldlM append (head vs) (tail vs)
   -- |Splits a data set into n random partitions.
   partition :: (MonadRandom m) => Int -> d a -> m (Vector (d a))
 
@@ -49,7 +49,8 @@ kfoldCV :: forall m d mr e me t a b .
   (DataSet d,MonadRandom mr,MonadError e me,Model m d) =>
   ErrorFunction d t a b -> d a -> Int -> mr (me [t Double])
 kfoldCV ef dset n = partition n dset >>=
-  \ds -> return $ mapM (\i -> concatSet (V.ifilter (\i' _ -> i'/=i) ds) >>=
+  \ds -> return $ mapM (\i -> concatSet (V.toList $
+                                         V.ifilter (\i' _ -> i'/=i) ds) >>=
                          \ds' -> return (testModel ef ds'
                                          (trainModel (ds V.! i) :: m)))
          [0..n]
