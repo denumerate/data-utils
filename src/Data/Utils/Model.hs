@@ -1,4 +1,5 @@
 {-# LANGUAGE TypeFamilies, MultiParamTypeClasses, ScopedTypeVariables #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 module Data.Utils.Model
   () where
 
@@ -40,7 +41,8 @@ class DataSet d where
 -- |A function that takes two data sets and produces a collection of error scores.
 type ErrorFunction d t a b = d a -> d b -> t Double
 
-kfoldCV :: (Model m d,DataSet d,MonadRandom mr,MonadError e me) =>
+kfoldCV :: forall m d mr e me t a b .
+  (DataSet d,MonadRandom mr,MonadError e me,Model m d) =>
   ErrorFunction d t a b -> d a -> Int -> mr (me [t Double])
 kfoldCV ef dset n = partition n dset >>=
   \ds -> return $ mapM (\i -> concatSet (V.ifilter (\i' _ -> i'/=i) ds) >>=
