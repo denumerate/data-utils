@@ -21,17 +21,17 @@ class DataSet d => Model m d i o where
   trainModel :: ModelParams i
     -> d i -- ^ The data set used to train the model.
     -> d o -- ^ The output data.
-    -> m -- ^ The produced model.
+    -> m i o -- ^ The produced model.
   -- |Uses a data set to predict a new data set of values.
   predict :: d i -- ^ The data set to predict new values with.
-    -> m -- ^ The model to use to predict.
+    -> m i o -- ^ The model to use to predict.
     -> d o -- ^ The new values.
   -- |Takes a model, a data set, and uses an error function to produce a
   -- collection of error values.
   testModel :: (o -> o -> a) -- ^ The error function.
     -> d i -- ^ The data set being used.
     -> d o -- ^ The associated output values.
-    -> m -- ^ The model being tested.
+    -> m i o -- ^ The model being tested.
     -> d a -- ^ The collected error values.
   testModel ef input output = combineBy ef output . predict input
 
@@ -60,5 +60,5 @@ kfoldCV ef sf ps dset n = partition n dset >>=
                            return (let (ia,oa) = splitBy sf ds'
                                        (ib,ob) = splitBy sf (ds V.! i) in
                                       testModel ef ib ob
-                                      (trainModel ps ia oa :: m)))
+                                      (trainModel ps ia oa :: m i o)))
          [0..n]
