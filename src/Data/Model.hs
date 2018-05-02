@@ -15,21 +15,23 @@ import Control.Monad.Except(MonadError)
 
 -- |Describes a model class that describes a function, built from a data set,
 -- that can then be used to predict new values on new data sets.
-class DataSet d => Model m d where
+class DataSet d => Model m d i o where
   -- |Trains a model using a provided data set.
-  trainModel :: d a -- ^ The data set used to train the model.
+  trainModel :: d i -- ^ The data set used to train the model.
+    -> d o -- ^ The output data.
     -> m -- ^ The produced model.
   -- |Uses a data set to predict a new data set of values.
-  predict :: d a -- ^ The data set to predict new values with.
+  predict :: d i -- ^ The data set to predict new values with.
     -> m -- ^ The model to use to predict.
-    -> d b -- ^ The new values.
+    -> d o -- ^ The new values.
   -- |Takes a model, a data set, and uses an error function to produce a
   -- collection of error values.
-  testModel :: ErrorFunction d t a b c
-    -> d a -- ^ The data set being used.
+  testModel :: ErrorFunction d t o a
+    -> d i -- ^ The data set being used.
+    -> d o -- ^ The associated output values.
     -> m -- ^ The model being tested.
-    -> t c -- ^ The collected error values.
-  testModel ef input = ef input . predict input
+    -> t a -- ^ The collected error values.
+  testModel ef input output = ef output . predict input
 
 -- |Basic operations required to work with a data set.
 class DataSet d where
@@ -43,11 +45,11 @@ class DataSet d where
   partition :: (MonadRandom m) => Int -> d a -> m (Vector (d a))
 
 -- |A function that takes two data sets and produces a collection of error scores.
-type ErrorFunction d t a b c = d a -> d b -> t c
+type ErrorFunction d t a b = d a -> d a -> t b
 
-kfoldCV :: forall m d mr e me t a b c .
-  (DataSet d,MonadRandom mr,MonadError e me,Model m d) =>
-  ErrorFunction d t a b c -> d a -> Int -> mr (me [t c])
+kfoldCV :: forall m d mr e me t a i o .
+  (DataSet d,MonadRandom mr,MonadError e me,Model m d i o) =>
+  ErrorFunction d t o a -> d a -> Int -> mr (me [t a])
 kfoldCV ef dset n = partition n dset >>=
   \ds -> return $ mapM (\i -> concatSet (V.toList $
                                          V.ifilter (\i' _ -> i'/=i) ds) >>=
