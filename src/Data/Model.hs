@@ -15,7 +15,7 @@ import Control.Monad.Except(MonadError)
 
 -- |Describes a model class that describes a function, built from a data set,
 -- that can then be used to predict new values on new data sets.
-class Model m d where
+class DataSet d => Model m d where
   -- |Trains a model using a provided data set.
   trainModel :: d a -- ^ The data set used to train the model.
     -> m -- ^ The produced model.
@@ -25,10 +25,10 @@ class Model m d where
     -> d b -- ^ The new values.
   -- |Takes a model, a data set, and uses an error function to produce a
   -- collection of error values.
-  testModel :: ErrorFunction d t a b
+  testModel :: ErrorFunction d t a b c
     -> d a -- ^ The data set being used.
     -> m -- ^ The model being tested.
-    -> t Double -- ^ The collected error values.
+    -> t c -- ^ The collected error values.
   testModel ef input = ef input . predict input
 
 -- |Basic operations required to work with a data set.
@@ -43,11 +43,11 @@ class DataSet d where
   partition :: (MonadRandom m) => Int -> d a -> m (Vector (d a))
 
 -- |A function that takes two data sets and produces a collection of error scores.
-type ErrorFunction d t a b = d a -> d b -> t Double
+type ErrorFunction d t a b c = d a -> d b -> t c
 
-kfoldCV :: forall m d mr e me t a b .
+kfoldCV :: forall m d mr e me t a b c .
   (DataSet d,MonadRandom mr,MonadError e me,Model m d) =>
-  ErrorFunction d t a b -> d a -> Int -> mr (me [t Double])
+  ErrorFunction d t a b c -> d a -> Int -> mr (me [t c])
 kfoldCV ef dset n = partition n dset >>=
   \ds -> return $ mapM (\i -> concatSet (V.toList $
                                          V.ifilter (\i' _ -> i'/=i) ds) >>=
