@@ -35,6 +35,8 @@ class DataSet d => Model m d i o where
 
 -- |Basic operations required to work with a data set.
 class DataSet d where
+  -- |Splits a data set into two using a function.
+  split :: (a -> (b,c)) -> d a -> (d b,d c)
   -- |Combines two data sets with the same record type.
   -- Allows for error throwing if the records do not match.
   append :: MonadError e m => d a -> d a -> m (d a)
@@ -47,12 +49,15 @@ class DataSet d where
 -- |A function that takes two data sets and produces a collection of error scores.
 type ErrorFunction d t a b = d a -> d a -> t b
 
-kfoldCV :: forall m d mr e me t a i o .
+kfoldCV :: forall m d mr e me t a i o b .
   (DataSet d,MonadRandom mr,MonadError e me,Model m d i o) =>
-  ErrorFunction d t o a -> d a -> Int -> mr (me [t a])
-kfoldCV ef dset n = partition n dset >>=
+  ErrorFunction d t o a -> (b -> (i,o)) -> d b -> Int -> mr (me [t a])
+kfoldCV ef sf dset n = partition n dset >>=
   \ds -> return $ mapM (\i -> concatSet (V.toList $
                                          V.ifilter (\i' _ -> i'/=i) ds) >>=
-                         \ds' -> return (testModel ef ds'
-                                         (trainModel (ds V.! i) :: m)))
+                         \ds' ->
+                           return (let (ia,oa) = split sf ds'
+                                       (ib,ob) = split sf (ds V.! i) in
+                                      testModel ef ib ob
+                                      (trainModel ia oa :: m)))
          [0..n]
