@@ -16,9 +16,9 @@ import Control.Monad.Except(MonadError)
 -- that can then be used to predict new values on new data sets.
 class DataSet d => Model m d i o where
   -- |A set of parameters used to build a model.
-  data ModelParams i
+  data ModelParams i o
   -- |Trains a model using a provided data set.
-  trainModel :: ModelParams i
+  trainModel :: ModelParams i o
     -> d i -- ^ The data set used to train the model.
     -> d o -- ^ The output data.
     -> m i o -- ^ The produced model.
@@ -52,7 +52,7 @@ class DataSet d where
 
 kfoldCV :: forall m d mr e me a i o b .
   (DataSet d,MonadRandom mr,MonadError e me,Model m d i o) =>
-  (o -> o -> a) -> (b -> (i,o)) -> ModelParams i -> d b -> Int -> mr (me [d a])
+  (o -> o -> a) -> (b -> (i,o)) -> ModelParams i o -> d b -> Int -> mr (me [d a])
 kfoldCV ef sf ps dset n = partition n dset >>=
   \ds -> return $ mapM (\i -> concatSet (V.toList $
                                          V.ifilter (\i' _ -> i'/=i) ds) >>=
