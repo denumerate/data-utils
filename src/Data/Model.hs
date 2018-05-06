@@ -3,10 +3,13 @@
 module Data.Model
   ( Model(..)
   , DataSet(..)
+  , RowTraversable(..)
+  , ColTraversable(..)
   , kfoldCV
   ) where
 
 import Data.Foldable(foldlM)
+import Data.Traversable(Traversable)
 import Data.Vector(Vector)
 import qualified Data.Vector as V
 import Control.Monad.Random.Class(MonadRandom)
@@ -49,6 +52,14 @@ class DataSet d where
   concatSet vs = foldlM append (head vs) (tail vs)
   -- |Splits a data set into n random partitions.
   partition :: (MonadRandom m) => Int -> d a -> m (Vector (d a))
+
+-- |Allows a data set to be moved through row by row.
+class RowTraversable d where
+  getRows :: Traversable t => d a -> t (t a)
+
+-- |Allows a data set to be moved through column by column.
+class ColTraversable d where
+  getCols :: Traversable t => d a -> t (t a)
 
 kfoldCV :: forall m d mr e me a i o b .
   (DataSet d,MonadRandom mr,MonadError e me,Model m d i o) =>
