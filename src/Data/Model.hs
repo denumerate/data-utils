@@ -19,24 +19,24 @@ import Control.Monad.Except(MonadError)
 -- that can then be used to predict new values on new data sets.
 class DataSet d => Model m d i o where
   -- |A set of parameters used to build a model.
-  data ModelParams i o
+  data ModelParams d i o
   -- |Trains a model using a provided data set.
-  trainModel :: ModelParams i o
+  trainModel :: Traversable t => ModelParams d i o
     -> d i -- ^ The data set used to train the model.
-    -> d o -- ^ The output data.
+    -> t o -- ^ The output data.
     -> m i o -- ^ The produced model.
   -- |Uses a data set to predict a new data set of values.
   predict :: d i -- ^ The data set to predict new values with.
     -> m i o -- ^ The model to use to predict.
-    -> d o -- ^ The new values.
+    -> [o] -- ^ The new values.
   -- |Takes a model, a data set, and uses an error function to produce a
   -- collection of error values.
   testModel :: (o -> o -> a) -- ^ The error function.
     -> d i -- ^ The data set being used.
-    -> d o -- ^ The associated output values.
+    -> [o] -- ^ The associated output values.
     -> m i o -- ^ The model being tested.
-    -> d a -- ^ The collected error values.
-  testModel ef input output = combineBy ef output . predict input
+    -> [a] -- ^ The collected error values.
+  testModel ef input output = zipWith ef output . predict input
 
 -- |Basic operations required to work with a data set.
 class DataSet d where
@@ -52,6 +52,8 @@ class DataSet d where
   concatSet vs = foldlM append (head vs) (tail vs)
   -- |Splits a data set into n random partitions.
   partition :: (MonadRandom m) => Int -> d a -> m (Vector (d a))
+  -- |Removes a single column from a data set.
+  extractColumn :: (a -> (b,c)) -> d a -> (d b,[c])
 
 -- |Allows a data set to be moved through row by row.
 class RowTraversable d where
@@ -63,13 +65,14 @@ class ColTraversable d where
 
 kfoldCV :: forall m d mr e me a i o b .
   (DataSet d,MonadRandom mr,MonadError e me,Model m d i o) =>
-  (o -> o -> a) -> (b -> (i,o)) -> ModelParams i o -> d b -> Int -> mr (me [d a])
+  (o -> o -> a) -> (b -> (i,o)) -> ModelParams d i o -> d b -> Int
+  -> mr (me [[a]])
 kfoldCV ef sf ps dset n = partition n dset >>=
   \ds -> return $ mapM (\i -> concatSet (V.toList $
                                          V.ifilter (\i' _ -> i'/=i) ds) >>=
                          \ds' ->
-                           return (let (ia,oa) = splitBy sf ds'
-                                       (ib,ob) = splitBy sf (ds V.! i) in
+                           return (let (ia,oa) = extractColumn sf ds'
+                                       (ib,ob) = extractColumn sf (ds V.! i) in
                                       testModel ef ib ob
                                       (trainModel ps ia oa :: m i o)))
          [0..n]
