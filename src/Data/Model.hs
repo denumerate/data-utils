@@ -2,77 +2,64 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 module Data.Model
   ( Model(..)
-  , DataSet(..)
-  , RowTraversable(..)
-  , ColTraversable(..)
   , kfoldCV
   ) where
 
-import Data.Foldable(foldlM)
-import Data.Traversable(Traversable)
-import Data.Vector(Vector)
+import Data.List(splitAt)
+import Numeric.LinearAlgebra.Data(Matrix,toRows,fromRows)
+import Numeric.LinearAlgebra(Element)
 import qualified Data.Vector as V
 import Control.Monad.Random.Class(MonadRandom)
+import System.Random.Shuffle(shuffleM)
 import Control.Monad.Except(MonadError)
 
 -- |Describes a model class that describes a function, built from a data set,
 -- that can then be used to predict new values on new data sets.
-class DataSet d => Model m d i o where
+class Model m i o where
   -- |A set of parameters used to build a model.
-  data ModelParams d i o
+  data ModelParams i o
   -- |Trains a model using a provided data set.
-  trainModel :: Traversable t => ModelParams d i o
-    -> d i -- ^ The data set used to train the model.
-    -> t o -- ^ The output data.
-    -> m i o -- ^ The produced model.
+  trainModel :: MonadError e me =>
+    ModelParams i o
+    -> Matrix i -- ^ The data set used to train the model.
+    -> [o] -- ^ The output data.
+    -> me (m i o) -- ^ The produced model.
   -- |Uses a data set to predict a new data set of values.
-  predict :: d i -- ^ The data set to predict new values with.
+  predict :: MonadError e me =>
+    Matrix i -- ^ The data set to predict new values with.
     -> m i o -- ^ The model to use to predict.
-    -> [o] -- ^ The new values.
+    -> me [o] -- ^ The new values.
   -- |Takes a model, a data set, and uses an error function to produce a
   -- collection of error values.
-  testModel :: (o -> o -> a) -- ^ The error function.
-    -> d i -- ^ The data set being used.
+  testModel :: MonadError e me =>
+    (o -> o -> a) -- ^ The error function.
+    -> Matrix i -- ^ The data set being used.
     -> [o] -- ^ The associated output values.
     -> m i o -- ^ The model being tested.
-    -> [a] -- ^ The collected error values.
-  testModel ef input output = zipWith ef output . predict input
+    -> me [a] -- ^ The collected error values.
+  testModel ef input output = fmap (zipWith ef output) . predict input
 
--- |Basic operations required to work with a data set.
-class DataSet d where
-  -- |Splits a data set into two using a function.
-  splitBy :: (a -> (b,c)) -> d a -> (d b,d c)
-  -- |Combines two data sets using a function.
-  combineBy :: (a -> b -> c) -> d a -> d b -> d c
-  -- |Combines two data sets with the same record type.
-  -- Allows for error throwing if the records do not match.
-  append :: MonadError e m => d a -> d a -> m (d a)
-  -- |Appends multiple data sets.
-  concatSet :: MonadError e m => [d a] -> m (d a)
-  concatSet vs = foldlM append (head vs) (tail vs)
-  -- |Splits a data set into n random partitions.
-  partition :: (MonadRandom m) => Int -> d a -> m (Vector (d a))
-  -- |Removes a single column from a data set.
-  extractColumn :: (a -> (b,c)) -> d a -> (d b,[c])
-
--- |Allows a data set to be moved through row by row.
-class RowTraversable d where
-  getRows :: Traversable t => d a -> t (t a)
-
--- |Allows a data set to be moved through column by column.
-class ColTraversable d where
-  getCols :: Traversable t => d a -> t (t a)
-
-kfoldCV :: forall m d mr e me a i o b .
-  (DataSet d,MonadRandom mr,MonadError e me,Model m d i o) =>
-  (o -> o -> a) -> (b -> (i,o)) -> ModelParams d i o -> d b -> Int
+-- |Performs k-fold cross-validation on a model system using the supplied data.
+kfoldCV :: forall m mr e me a i o .
+  (MonadRandom mr,MonadError e me,Model m i o,Element i) =>
+  (o -> o -> a) -> ModelParams i o -> Matrix i -> [o] -> Int
   -> mr (me [[a]])
-kfoldCV ef sf ps dset n = partition n dset >>=
-  \ds -> return $ mapM (\i -> concatSet (V.toList $
-                                         V.ifilter (\i' _ -> i'/=i) ds) >>=
-                         \ds' ->
-                           return (let (ia,oa) = extractColumn sf ds'
-                                       (ib,ob) = extractColumn sf (ds V.! i) in
-                                      testModel ef ib ob
-                                      (trainModel ps ia oa :: m i o)))
-         [0..n]
+kfoldCV ef params ins outs n =
+  ((\ps -> let ps' = V.fromList ps in
+       mapM (\i -> let (test,train) =
+                         V.ifoldl' (\(a,b) i' val -> if i' == i
+                                     then (val,b) else (a,val:b))
+                         ([],[]) ps' in
+                (trainModel params (fromRows $ concatMap (map fst) train)
+                  (concatMap (map snd) train) :: me (m i o)) >>=
+                testModel ef (fromRows $ map fst test) (map snd test))
+       [0..n -1]) . splitN n) <$> shuffleM (zip (toRows ins) outs)
+
+-- |Splits a list into n sub-lists.
+splitN :: Int -> [a] -> [[a]]
+splitN x = reverse . splitN' x
+  where
+    splitN' n ls
+      |n <= 1 = [ls]
+      |otherwise = let (fs,rst) = splitAt (div (length ls) n) ls in
+                     fs : splitN' (n - 1) rst
