@@ -5,8 +5,8 @@ module Data.Read
   ) where
 
 import System.IO(IOMode(..),FilePath,hGetContents,openFile,hClose)
-import Text.Parsec(parserFail,(<|>),parse,ParseError)
-import Text.Parsec.Combinator(many1,sepBy,sepEndBy)
+import Text.Parsec(parserFail,(<|>),parse,ParseError,many,string,try,(<?>))
+import Text.Parsec.Combinator(sepBy,endBy)
 import Text.Parsec.String(Parser)
 import Text.Parsec.Char(noneOf,char,crlf)
 import Text.Read(readMaybe)
@@ -35,21 +35,22 @@ readCSV2 fa fb fpath as bs = openFile fpath ReadMode >>=
   \handle -> fmap (parse (parseCSV (parseLine2 fa fb as bs)) "CSV")
   (hGetContents handle) >>=
   \val ->
-    hClose handle >>
     case val of
-      Left e -> return $ Left e
-      Right ls -> let m1 = fromRows $ map (LN.fromList . fst) ls
+      Left e -> hClose handle >>
+                return (Left e)
+      Right ls -> hClose handle >>
+                  let m1 = fromRows $ map (LN.fromList . fst) ls
                       m2 = fromRows $ map (LN.fromList . snd) ls in
                     return $ Right (m1,m2)
 
 -- |Uses a line parser to parse a csv
 parseCSV :: Parser a -> Parser [a]
-parseCSV p = sepEndBy p (crlf <|> char '\n' <|> char '\r')
+parseCSV p = endBy p eol
 
 -- |Parses a line of a csv, extracting the asked for cells
 parseLine :: forall a b . Read a => (a -> b) -> [Int] -> Parser [b]
 parseLine f is =
-  sepBy (many1 (noneOf [',','\n','r'])) (char ',') >>=
+  sepBy (many (noneOf ",\n\r")) (char ',') >>=
   \cs -> case mapM (\(x,_) -> f <$> (readMaybe x :: Maybe a)) $
               filter (\(_,i) -> elem i is) $ zip cs [0..] of
            Just cs' -> return cs'
@@ -61,7 +62,7 @@ parseLine f is =
 parseLine2 :: forall a b c d . (Read a,Read b) =>
   (a -> c) -> (b -> d) -> [Int] -> [Int] -> Parser ([c],[d])
 parseLine2 fa fb as bs =
-  sepBy (many1 (noneOf [',','\n','r'])) (char ',') >>=
+  sepBy (many (noneOf ",\r\n")) (char ',') >>=
   \cs -> case foldM (\acc@(as',bs') (x,i) ->
                        if
                          |elem i as -> (\x' -> (fa x':as',bs')) <$>
@@ -72,3 +73,10 @@ parseLine2 fa fb as bs =
               zip cs [0..] of
            Just (x,y) -> return (reverse x,reverse y)
            _ -> parserFail "Read Failed"
+
+eol :: Parser String
+eol =   try (string "\n\r")
+    <|> try (string "\r\n")
+    <|> string "\n"
+    <|> string "\r"
+    <?> "end of line"
