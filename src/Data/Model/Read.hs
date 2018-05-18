@@ -1,5 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables, MultiWayIf #-}
-module Data.Read
+module Data.Model.Read
   ( readCSV
   , readCSV2
   ) where
@@ -8,7 +8,7 @@ import System.IO(IOMode(..),FilePath,hGetContents,openFile,hClose)
 import Text.Parsec(parserFail,(<|>),parse,ParseError,many,string,try,(<?>))
 import Text.Parsec.Combinator(sepBy,endBy)
 import Text.Parsec.String(Parser)
-import Text.Parsec.Char(noneOf,char,crlf)
+import Text.Parsec.Char(noneOf,char)
 import Text.Read(readMaybe)
 import Numeric.LinearAlgebra(Element)
 import Numeric.LinearAlgebra.Data(Matrix,fromRows)
