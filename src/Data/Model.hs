@@ -24,8 +24,8 @@ type ModelM m i o = Matrix i -> m (Matrix o)
 kfoldCV :: forall m a i o .
   (MonadRandom m,Element i,Element o) =>
   (Matrix i -> Matrix o -> m (Model i o)) ->
-  (Matrix o -> Matrix o -> Matrix a) -> Matrix i -> Matrix o -> Int
-  -> m [Matrix a]
+  (Matrix o -> Matrix o -> a) -> Matrix i -> Matrix o -> Int
+  -> m [a]
 kfoldCV bf ef ins outs n =
   shuffleM (zip (toRows ins) (toRows outs)) >>=
   ((\ps -> let ps' = V.fromList ps in
@@ -43,8 +43,8 @@ kfoldCV bf ef ins outs n =
 kfoldCVM :: forall m a i o .
   (MonadRandom m,Element i,Element o) =>
   (Matrix i -> Matrix o -> m (ModelM m i o)) ->
-  (Matrix o -> Matrix o -> Matrix a) -> Matrix i -> Matrix o -> Int
-  -> m [Matrix a]
+  (Matrix o -> Matrix o -> a) -> Matrix i -> Matrix o -> Int
+  -> m [a]
 kfoldCVM bf ef ins outs n =
   shuffleM (zip (toRows ins) (toRows outs)) >>=
   ((\ps -> let ps' = V.fromList ps in
