@@ -42,7 +42,7 @@ kfoldCV bf ef ins outs n =
 -- |Performs k-fold cross-validation on a model system using the supplied data.
 kfoldCVM :: forall m a i o .
   (MonadRandom m,Element i,Element o) =>
-  (Matrix i -> Matrix o -> ModelM m i o) ->
+  (Matrix i -> Matrix o -> m (ModelM m i o)) ->
   (Matrix o -> Matrix o -> Matrix a) -> Matrix i -> Matrix o -> Int
   -> m [Matrix a]
 kfoldCVM bf ef ins outs n =
@@ -53,9 +53,9 @@ kfoldCVM bf ef ins outs n =
                                      then (val,b) else (a,val:b))
                          ([],[]) ps'
                        train' = concat $ reverse train in
-                ef (fromColumns $ map snd test) <$>
-                bf (fromRows $ map fst train') (fromRows $ map snd train')
-                (fromRows $ map fst test))
+                bf (fromRows $ map fst train') (fromRows $ map snd train') >>=
+                \m -> ef (fromColumns $ map snd test) <$>
+                      m (fromRows $ map fst test))
        [0..n -1]) . splitN n)
 
 -- |Splits a list into n sub-lists.
